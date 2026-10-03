@@ -32,13 +32,46 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build release APK
+      - name: Fix Java/Kotlin JVM targets
         working-directory: build-project/FitTrack
-        run: gradle --no-daemon assembleRelease
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/build.gradle.kts")
+          text = p.read_text()
+
+          if "sourceCompatibility = JavaVersion.VERSION_17" not in text:
+              text = text.replace(
+                  "android {",
+                  """android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }""",
+                  1
+              )
+
+          if "jvmTarget = \"17\"" not in text:
+              text += """
+
+          tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          """
+
+          p.write_text(text)
+          PY
+
+      - name: Build installable APK
+        working-directory: build-project/FitTrack
+        run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FitTrack-release-apk
-          path: build-project/FitTrack/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: FitTrack-debug-apk
+          path: build-project/FitTrack/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
